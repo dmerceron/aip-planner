@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Platform FY27 Delivery Plan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="gantt-viewer.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" aria-label="AI Platform">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>AI Platform</span>
+    </div>
+    <div class="title-block">
+      <h1>FY27 Delivery Plan</h1>
+      <p>03 Aug 2026 — 30 Jun 2027</p>
+    </div>
+    <div class="top-actions timeline-only">
+      <a class="source-link" href="ai-platform-fy27-detailed-gantt.mmd" target="_blank">Mermaid source</a>
+      <button id="exportButton" class="button button-light" type="button">Export SVG</button>
+    </div>
+  </header>
+
+  <nav class="view-tabs" aria-label="Tool views">
+    <button id="timelineTab" class="view-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="timelineView">
+      Delivery timeline
+    </button>
+    <button id="activityTab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="activityView">
+      Activity editor
+    </button>
+    <button id="teamsTab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="teamsView">
+      Workstream
+    </button>
+    <button id="peopleTab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="peopleView">
+      People
+    </button>
+  </nav>
+
+  <main id="timelineView" class="app-shell" role="tabpanel" aria-labelledby="timelineTab">
+    <aside class="filter-panel" aria-label="Plan filters">
+      <div class="filter-heading">
+        <div>
+          <p class="utility-label">FILTERS</p>
+          <h2>Focus the plan</h2>
+        </div>
+        <button id="collapseFilters" class="icon-button" type="button" aria-label="Collapse filters" title="Collapse filters">‹</button>
+      </div>
+
+      <label class="search-control">
+        <span class="sr-only">Search tasks</span>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+        <input id="taskSearch" type="search" placeholder="Search tasks…" autocomplete="off">
+      </label>
+
+      <section class="filter-section">
+        <div class="section-title-row">
+          <h3>People</h3>
+          <span id="peopleSelectionCount" class="selection-count"></span>
+        </div>
+        <label class="search-control compact">
+          <span class="sr-only">Search people</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+          <input id="peopleSearch" type="search" placeholder="Search people…" autocomplete="off">
+        </label>
+        <div class="inline-actions">
+          <button id="selectAllPeople" type="button">Select all</button>
+          <button id="clearPeople" type="button">Clear</button>
+        </div>
+        <div id="peopleFilters" class="checkbox-list grouped-list"></div>
+      </section>
+
+      <section class="filter-section">
+        <div class="section-title-row">
+          <h3>Releases</h3>
+          <span id="releaseSelectionCount" class="selection-count"></span>
+        </div>
+        <div id="releaseFilters" class="release-grid"></div>
+      </section>
+
+      <section class="filter-section workstream-section">
+        <div class="section-title-row">
+          <h3>Workstreams</h3>
+          <span id="workstreamSelectionCount" class="selection-count"></span>
+        </div>
+        <div class="inline-actions">
+          <button id="selectAllWorkstreams" type="button">Select all</button>
+          <button id="clearWorkstreams" type="button">Clear</button>
+        </div>
+        <div id="workstreamFilters" class="checkbox-list"></div>
+      </section>
+
+      <section class="filter-section tag-section">
+        <div class="section-title-row">
+          <h3>Tags</h3>
+          <span id="tagSelectionCount" class="selection-count"></span>
+        </div>
+        <div class="inline-actions">
+          <button id="selectAllTags" type="button">Select all</button>
+          <button id="clearTags" type="button">Clear</button>
+        </div>
+        <div id="tagFilters" class="checkbox-list"></div>
+      </section>
+
+      <label class="toggle-row">
+        <input id="keepGates" type="checkbox" checked>
+        <span class="toggle-track" aria-hidden="true"></span>
+        <span>Keep portfolio gates visible</span>
+      </label>
+
+      <button id="resetFilters" class="button button-primary reset-button" type="button">Reset all filters</button>
+    </aside>
+
+    <section class="workspace" aria-label="Gantt chart workspace">
+      <div class="summary-bar">
+        <div class="metric"><strong id="visibleTasks">—</strong><span>Visible tasks</span></div>
+        <div class="metric"><strong id="visiblePeople">—</strong><span>People in view</span></div>
+        <div class="metric"><strong id="visibleWorkstreams">—</strong><span>Workstreams</span></div>
+        <div class="summary-spacer"></div>
+        <div class="zoom-control" aria-label="Chart zoom">
+          <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+          <output id="zoomValue">100%</output>
+          <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+          <button id="fitChart" type="button">Fit width</button>
+        </div>
+      </div>
+
+      <div id="releaseRibbon" class="release-ribbon" aria-label="Release timeline">
+        <div id="releaseTrack" class="release-track">
+          <span class="fy-label">FY27</span>
+          <span class="release r4" data-release="R4">R4 · Aug–Sep</span>
+          <span class="release r5" data-release="R5">R5 · Oct–Dec</span>
+          <span class="release r6" data-release="R6">R6 · Jan–Mar</span>
+          <span class="release r7" data-release="R7">R7 · Apr–Jun</span>
+        </div>
+      </div>
+
+      <div id="activeFilters" class="active-filters" aria-live="polite"></div>
+
+      <div id="chartViewport" class="chart-viewport" tabindex="0">
+        <div id="dateGuide" class="date-guide hidden" aria-hidden="true"></div>
+        <output id="dateTooltip" class="date-tooltip hidden" aria-live="off"></output>
+        <div id="loadingState" class="state-message">
+          <div class="loader" aria-hidden="true"></div>
+          <strong>Preparing the FY27 plan</strong>
+          <span>Loading the Mermaid source and building the timeline…</span>
+        </div>
+        <div id="emptyState" class="state-message hidden">
+          <strong>No tasks match these filters</strong>
+          <span>Try selecting more people, releases, or workstreams.</span>
+          <button id="emptyReset" class="button button-primary" type="button">Reset filters</button>
+        </div>
+        <div id="chart" class="chart" aria-label="Filtered FY27 Gantt chart"></div>
+      </div>
+
+      <footer class="statusbar">
+        <span id="renderStatus">Loading source plan…</span>
+        <span>Tip: Ctrl/⌘ + click people to build a focused cross-team view</span>
+      </footer>
+    </section>
+  </main>
+
+  <main id="activityView" class="management-view hidden" role="tabpanel" aria-labelledby="activityTab">
+    <header class="management-toolbar">
+      <div>
+        <h2>Activities and milestones</h2>
+        <p>Edit effort, optional starts, working-day durations, owners, releases and dependencies.</p>
+      </div>
+      <div class="management-actions">
+        <label class="table-search"><span class="sr-only">Search activities</span><input id="activityTableSearch" type="search" placeholder="Search activities…"></label>
+        <button id="exportMarkdown" class="button" type="button">Save Markdown</button>
+        <button id="importMarkdown" class="button" type="button">Load Markdown</button>
+        <button id="exportExcel" class="button" type="button">Export Excel</button>
+        <button id="importExcel" class="button" type="button">Import Excel</button>
+        <button id="importFeatures" class="button" type="button">Import Features</button>
+        <button id="addActivity" class="button button-primary" type="button">Add activity</button>
+        <input id="markdownFileInput" class="sr-only" type="file" accept=".md,.markdown,text/markdown,text/plain">
+        <input id="excelFileInput" class="sr-only" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <input id="featuresFileInput" class="sr-only" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+      </div>
+    </header>
+    <div class="bulk-activity-bar" aria-label="Bulk activity actions">
+      <span id="activitySelectionCount" class="bulk-selection-count" aria-live="polite">0 selected</span>
+      <span class="bulk-selection-help">Click · Ctrl/⌘-click to toggle · Shift-click to add a range · Ctrl/⌘+A selects all.</span>
+      <button id="selectVisibleActivities" class="button" type="button">Select all shown</button>
+      <label class="bulk-release-field bulk-workstream-field"><span>Workstream</span><select id="bulkActivityWorkstream"><option value="">No workstream</option></select></label>
+      <button id="applyBulkWorkstream" class="button button-primary" type="button" disabled>Set workstream</button>
+      <label class="bulk-release-field"><span>Release</span><select id="bulkActivityRelease"><option value=""></option><option>R4</option><option>R5</option><option>R6</option><option>R7</option></select></label>
+      <button id="applyBulkRelease" class="button button-primary" type="button" disabled>Set release</button>
+      <label class="bulk-release-field bulk-tags-field"><span>Tags</span><input id="bulkActivityTags" type="text" placeholder="tag1, tag2"></label>
+      <button id="applyBulkTags" class="button button-primary" type="button" disabled>Replace common tags</button>
+      <button id="clearActivitySelection" class="button" type="button" disabled>Clear selection</button>
+      <button id="deleteSelectedActivities" class="button button-danger" type="button" disabled>Delete selected</button>
+      <span id="bulkActivityStatus" class="bulk-activity-status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="table-shell">
+      <table class="data-table activity-table">
+        <thead><tr><th>Activity / milestone</th><th>Jira ticket</th><th>Workstream</th><th>Release</th><th>Tags</th><th>Start</th><th>Duration</th><th>Effort</th><th>End</th><th>People</th><th>Dependencies</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody id="activityTableBody"></tbody>
+      </table>
+    </div>
+    <footer class="management-footer"><span id="activityTableCount"></span><span>Changes are saved in this browser and update the delivery timeline.</span></footer>
+  </main>
+
+  <main id="peopleView" class="management-view hidden" role="tabpanel" aria-labelledby="peopleTab">
+    <header class="management-toolbar">
+      <div>
+        <h2>People, roles and leave</h2>
+        <p>Maintain team membership, roles and multiple leave periods for FY27.</p>
+      </div>
+      <div class="management-actions">
+        <label class="table-search"><span class="sr-only">Search team members</span><input id="peopleTableSearch" type="search" placeholder="Search people…"></label>
+        <button id="addTeamMember" class="button button-primary" type="button">Add team member</button>
+      </div>
+    </header>
+    <div class="table-shell">
+      <table class="data-table people-table">
+        <thead><tr><th>Name</th><th>Team</th><th>Role</th><th>Leave periods</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody id="peopleTableBody"></tbody>
+      </table>
+    </div>
+    <footer class="management-footer"><span id="peopleTableCount"></span><span>Removing a member also removes them from activity allocations.</span></footer>
+  </main>
+
+  <main id="teamsView" class="management-view hidden" role="tabpanel" aria-labelledby="teamsTab">
+    <header class="management-toolbar">
+      <div>
+        <h2>Teams and team leads</h2>
+        <p>Create teams, rename them and select a lead from their assigned members.</p>
+      </div>
+      <div class="management-actions">
+        <label class="table-search"><span class="sr-only">Search teams</span><input id="teamsTableSearch" type="search" placeholder="Search teams…"></label>
+        <button id="addTeam" class="button button-primary" type="button">Add team</button>
+      </div>
+    </header>
+    <div class="table-shell">
+      <table class="data-table teams-table">
+        <thead><tr><th>Team</th><th>Team lead</th><th>Members</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody id="teamsTableBody"></tbody>
+      </table>
+    </div>
+    <footer class="management-footer"><span id="teamsTableCount"></span><span>Deleting a team keeps its members and moves them to No team.</span></footer>
+  </main>
+
+  <dialog id="activityDialog" class="editor-dialog">
+    <form id="activityForm" method="dialog">
+      <div class="dialog-heading"><div><p class="utility-label">PLAN ITEM</p><h2 id="activityDialogTitle">Add activity</h2></div><button class="dialog-close" type="button" data-close-dialog="activityDialog" aria-label="Close">×</button></div>
+      <input id="activityEditId" type="hidden">
+      <div class="form-grid">
+        <label class="field field-wide"><span>Name</span><input id="activityName" required maxlength="180"></label>
+        <label class="field"><span>Jira ticket <small>Optional</small></span><input id="activityJira" maxlength="40" placeholder="e.g. AIP-1234"></label>
+        <label class="field"><span>Workstream <small>Optional</small></span><select id="activityWorkstream"></select></label>
+        <label class="field"><span>Type</span><select id="activityType"><option value="activity">Activity</option><option value="crit">Critical activity</option><option value="milestone">Milestone</option></select></label>
+        <label class="field"><span>Release</span><select id="activityRelease"><option value=""></option><option>R4</option><option>R5</option><option>R6</option><option>R7</option></select></label>
+        <label class="field"><span>Tags <small>Comma separated, optional</small></span><input id="activityTags" maxlength="300" placeholder="e.g. security, agent"></label>
+        <label class="field"><span>Start date <small>Optional with dependencies</small></span><input id="activityStart" type="date" min="2026-08-03" max="2027-06-30"></label>
+        <label class="field"><span>Duration <small>Working days</small></span><input id="activityDuration" type="number" min="1" max="260" step="1" required value="10"></label>
+        <label class="field"><span>Effort <small>Person-days, optional</small></span><input id="activityEffort" type="number" min="0" max="10000" step="0.5" placeholder="e.g. 15"></label>
+        <label class="field"><span>People <small>Ctrl/⌘ for several</small></span><select id="activityOwners" multiple size="7"></select></label>
+        <label class="field"><span>Dependencies <small>Ctrl/⌘ for several</small></span><select id="activityDependencies" multiple size="7"></select></label>
+      </div>
+      <p id="activityFormError" class="form-error" role="alert"></p>
+      <div class="dialog-actions"><button value="cancel" class="button" type="button" data-close-dialog="activityDialog">Cancel</button><button id="saveActivity" class="button button-primary" type="submit">Save activity</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="memberDialog" class="editor-dialog small-dialog">
+    <form id="memberForm" method="dialog">
+      <div class="dialog-heading"><div><p class="utility-label">TEAM MEMBER</p><h2 id="memberDialogTitle">Add team member</h2></div><button class="dialog-close" type="button" data-close-dialog="memberDialog" aria-label="Close">×</button></div>
+      <input id="memberEditId" type="hidden">
+      <div class="form-grid">
+        <label class="field field-wide"><span>Name</span><input id="memberName" required maxlength="80"></label>
+        <label class="field field-wide"><span>Team</span><select id="memberTeam"></select></label>
+        <label class="field field-wide"><span>Role <small>Optional</small></span><input id="memberRole" maxlength="100" placeholder="e.g. Product Owner"></label>
+      </div>
+      <p id="memberFormError" class="form-error" role="alert"></p>
+      <div class="dialog-actions"><button class="button" type="button" data-close-dialog="memberDialog">Cancel</button><button class="button button-primary" type="submit">Save member</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="teamDialog" class="editor-dialog small-dialog">
+    <form id="teamForm" method="dialog">
+      <div class="dialog-heading"><div><p class="utility-label">TEAM</p><h2 id="teamDialogTitle">Add team</h2></div><button class="dialog-close" type="button" data-close-dialog="teamDialog" aria-label="Close">×</button></div>
+      <input id="teamEditId" type="hidden">
+      <div class="form-grid">
+        <label class="field field-wide"><span>Team name</span><input id="teamName" required maxlength="100"></label>
+        <label class="field field-wide"><span>Team lead <small>Optional</small></span><select id="teamLead"></select></label>
+      </div>
+      <p id="teamFormHelp" class="form-help">Assign staff to this team before selecting its lead.</p>
+      <p id="teamFormError" class="form-error" role="alert"></p>
+      <div class="dialog-actions"><button class="button" type="button" data-close-dialog="teamDialog">Cancel</button><button class="button button-primary" type="submit">Save team</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="leaveDialog" class="editor-dialog small-dialog">
+    <form id="leaveForm" method="dialog">
+      <div class="dialog-heading"><div><p class="utility-label">LEAVE PERIOD</p><h2 id="leaveDialogTitle">Add leave</h2></div><button class="dialog-close" type="button" data-close-dialog="leaveDialog" aria-label="Close">×</button></div>
+      <input id="leaveMemberId" type="hidden"><input id="leaveEditIndex" type="hidden">
+      <div class="form-grid"><label class="field"><span>From</span><input id="leaveFrom" type="date" min="2026-08-03" max="2027-06-30" required></label><label class="field"><span>To</span><input id="leaveTo" type="date" min="2026-08-03" max="2027-06-30" required></label></div>
+      <p id="leaveFormError" class="form-error" role="alert"></p>
+      <div class="dialog-actions"><button class="button" type="button" data-close-dialog="leaveDialog">Cancel</button><button class="button button-primary" type="submit">Save leave</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="gantt-viewer.js?v=26"></script>
+</body>
+</html>

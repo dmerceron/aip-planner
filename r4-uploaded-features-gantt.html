@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>R4 Uploaded Features Gantt</title>
+<style>
+:root{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#10284e;background:#eef3f8}*{box-sizing:border-box}body{margin:0}.top{background:#061b3f;color:#fff;border-bottom:3px solid #53d22c;padding:18px 24px}.top h1{margin:0;font-size:24px}.top p{margin:5px 0 0;color:#c9d7ea}.summary{display:flex;gap:12px;padding:16px 24px}.card{min-width:150px;background:#fff;border:1px solid #d4deea;padding:12px 14px}.card strong{display:block;font-size:24px}.card span{font-size:11px;color:#60738d}.note{margin:0 24px 14px;padding:10px 12px;background:#fff8df;border-left:4px solid #d9a600;font-size:12px}.chart-shell{margin:0 24px 18px;background:#fff;border:1px solid #d4deea;overflow:auto;padding:12px;min-height:520px}.mermaid{min-width:1600px}.data{margin:0 24px 30px;background:#fff;border:1px solid #d4deea;overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}th{position:sticky;top:0;background:#e9f0f8;text-align:left;padding:9px;border-bottom:1px solid #c4d1e0}td{padding:8px 9px;border-bottom:1px solid #e4eaf1}td:first-child{font-weight:700;color:#2a8115}
+</style></head><body>
+<header class="top"><h1>R4 uploaded-feature delivery plan</h1><p>03 Aug–30 Sep 2026 · Activities sourced exclusively from prioritisation workbook positions 25–49</p></header>
+<section class="summary"><div class="card"><strong>25</strong><span>uploaded activities</span></div><div class="card"><strong>580</strong><span>effort points</span></div><div class="card"><strong>4</strong><span>priority waves</span></div></section>
+<p class="note">Durations currently use effort points as working-day placeholders. No owners, dependencies, roadmap tasks or milestones were added.</p>
+<main class="chart-shell"><pre class="mermaid">%%{init: {&quot;theme&quot;:&quot;base&quot;,&quot;gantt&quot;:{&quot;barHeight&quot;:24,&quot;barGap&quot;:8,&quot;topPadding&quot;:48,&quot;leftPadding&quot;:300,&quot;fontSize&quot;:12},&quot;themeVariables&quot;:{&quot;fontFamily&quot;:&quot;Inter, Segoe UI, Arial, sans-serif&quot;,&quot;taskBkgColor&quot;:&quot;#42aa24&quot;,&quot;taskBorderColor&quot;:&quot;#2a8115&quot;,&quot;taskTextColor&quot;:&quot;#ffffff&quot;,&quot;taskTextOutsideColor&quot;:&quot;#10284e&quot;,&quot;sectionBkgColor&quot;:&quot;#f6f9fc&quot;,&quot;altSectionBkgColor&quot;:&quot;#ffffff&quot;,&quot;gridColor&quot;:&quot;#d7e0eb&quot;}}}%%
+gantt
+    title R4 prioritised uploaded features · 03 Aug–30 Sep 2026
+    dateFormat YYYY-MM-DD
+    axisFormat %d %b
+    tickInterval 1week
+    excludes weekends
+    todayMarker off
+
+    section Wave 1 · Priorities 25–30
+    Agent to Agent and Agent Organisation Model :feature-r4-14, 2026-08-03, 15d
+    Sharing of chatgpt agents :feature-r4-117, 2026-08-03, 15d
+    ServiceNow Agent :feature-r4-40, 2026-08-03, 5d
+    Snowflake and Databricks Enterprise Identity and Access :feature-r4-49, 2026-08-03, 90d
+    SuccessFactors MCP :feature-r4-45, 2026-08-03, 40d
+    Meeting minutes - establishing meeting minutes as a knowledge repositories :feature-r4-116, 2026-08-03, 25d
+
+    section Wave 2 · Priorities 31–36
+    Ontology Management :feature-r4-31, 2026-08-17, 60d
+    Preapprove FIT Paths :feature-r4-36, 2026-08-17, 10d
+    GPU Booking Approach :feature-r4-109, 2026-08-17, 25d
+    Contractor Management System Connector :feature-r4-22, 2026-08-17, 15d
+    Platform approach/guidance on minimising impact of bugs introduced via ChatGPT as agent hosts :feature-r4-115, 2026-08-17, 15d
+    AI &amp; License Management i.e. AutoCAD :feature-r4-114, 2026-08-17, 10d
+
+    section Wave 3 · Priorities 37–42
+    Bentley Micro MCP :feature-r4-113, 2026-08-31, 15d
+    Primavera MCP :feature-r4-112, 2026-08-31, 10d
+    Guidance/Framework for apps that don&#39;t provide OBO APIs/MCPs i.e. Anaplan :feature-r4-111, 2026-08-31, 15d
+    Agent Monitoring, Evaluation and Workflow Tracking :feature-r4-28, 2026-08-31, 50d
+    Dynamics CRM MCP :feature-r4-118, 2026-08-31, 10d
+    ArcGIS MCP :feature-r4-110, 2026-08-31, 10d
+
+    section Wave 4 · Priorities 43–49
+    Provide a supported way to share AI generated dashboards/presentations :feature-r4-120, 2026-09-14, 15d
+    Agents embedded in Teams :feature-r4-122, 2026-09-14, 15d
+    Support Codex and experiment jobs beyond laptop capacity :feature-r4-121, 2026-09-14, 15d
+    Agent Patterns - Voice &amp; Chat :feature-r4-123, 2026-09-14, 25d
+    Success Factors A2O Connector :feature-r4-105, 2026-09-14, 25d
+    A2A Spike &amp; Planning with Domains :feature-r4-103, 2026-09-14, 25d
+    Semantic &amp; Contextual Search - Discovery &amp; Solutioning :feature-r4-124, 2026-09-14, 25d</pre></main>
+<section class="data"><table><thead><tr><th>Priority</th><th>Activity</th><th>Jira</th><th>Effort</th><th>Start</th><th>Finish</th></tr></thead><tbody><tr><td>25</td><td>Agent to Agent and Agent Organisation Model</td><td>FDAP-18150</td><td>15</td><td>2026-08-03</td><td>2026-08-21</td></tr><tr><td>26</td><td>Sharing of chatgpt agents</td><td>FDAP-19689</td><td>15</td><td>2026-08-03</td><td>2026-08-21</td></tr><tr><td>27</td><td>ServiceNow Agent</td><td>FDAP-17833</td><td>5</td><td>2026-08-03</td><td>2026-08-07</td></tr><tr><td>28</td><td>Snowflake and Databricks Enterprise Identity and Access</td><td>FDAP-17786</td><td>90</td><td>2026-08-03</td><td>2026-12-04</td></tr><tr><td>29</td><td>SuccessFactors MCP</td><td>FDAP-17830</td><td>40</td><td>2026-08-03</td><td>2026-09-25</td></tr><tr><td>30</td><td>Meeting minutes - establishing meeting minutes as a knowledge repositories</td><td>FDAP-19688</td><td>25</td><td>2026-08-03</td><td>2026-09-04</td></tr><tr><td>31</td><td>Ontology Management</td><td>FDAP-17713</td><td>60</td><td>2026-08-17</td><td>2026-11-06</td></tr><tr><td>32</td><td>Preapprove FIT Paths</td><td>FDAP-17804</td><td>10</td><td>2026-08-17</td><td>2026-08-28</td></tr><tr><td>33</td><td>GPU Booking Approach</td><td>FDAP-19667</td><td>25</td><td>2026-08-17</td><td>2026-09-18</td></tr><tr><td>34</td><td>Contractor Management System Connector</td><td>FDAP-17844</td><td>15</td><td>2026-08-17</td><td>2026-09-04</td></tr><tr><td>35</td><td>Platform approach/guidance on minimising impact of bugs introduced via ChatGPT as agent hosts</td><td>FDAP-19687</td><td>15</td><td>2026-08-17</td><td>2026-09-04</td></tr><tr><td>36</td><td>AI &amp; License Management i.e. AutoCAD</td><td>FDAP-19686</td><td>10</td><td>2026-08-17</td><td>2026-08-28</td></tr><tr><td>37</td><td>Bentley Micro MCP</td><td>FDAP-19684</td><td>15</td><td>2026-08-31</td><td>2026-09-18</td></tr><tr><td>38</td><td>Primavera MCP</td><td>FDAP-19677</td><td>10</td><td>2026-08-31</td><td>2026-09-11</td></tr><tr><td>39</td><td>Guidance/Framework for apps that don&#39;t provide OBO APIs/MCPs i.e. Anaplan</td><td>FDAP-19679</td><td>15</td><td>2026-08-31</td><td>2026-09-18</td></tr><tr><td>40</td><td>Agent Monitoring, Evaluation and Workflow Tracking</td><td>FDAP-17795</td><td>50</td><td>2026-08-31</td><td>2026-11-06</td></tr><tr><td>41</td><td>Dynamics CRM MCP</td><td>FDAP-19678</td><td>10</td><td>2026-08-31</td><td>2026-09-11</td></tr><tr><td>42</td><td>ArcGIS MCP</td><td>FDAP-19680</td><td>10</td><td>2026-08-31</td><td>2026-09-11</td></tr><tr><td>43</td><td>Provide a supported way to share AI generated dashboards/presentations</td><td>FDAP-19966</td><td>15</td><td>2026-09-14</td><td>2026-10-02</td></tr><tr><td>44</td><td>Agents embedded in Teams</td><td>FDAP-19962</td><td>15</td><td>2026-09-14</td><td>2026-10-02</td></tr><tr><td>45</td><td>Support Codex and experiment jobs beyond laptop capacity</td><td>FDAP-19965</td><td>15</td><td>2026-09-14</td><td>2026-10-02</td></tr><tr><td>46</td><td>Agent Patterns - Voice &amp; Chat</td><td>FDAP-20911</td><td>25</td><td>2026-09-14</td><td>2026-10-16</td></tr><tr><td>47</td><td>Success Factors A2O Connector</td><td>FDAP-17843</td><td>25</td><td>2026-09-14</td><td>2026-10-16</td></tr><tr><td>48</td><td>A2A Spike &amp; Planning with Domains</td><td>FDAP-18150</td><td>25</td><td>2026-09-14</td><td>2026-10-16</td></tr><tr><td>49</td><td>Semantic &amp; Contextual Search - Discovery &amp; Solutioning</td><td>FDAP-20912</td><td>25</td><td>2026-09-14</td><td>2026-10-16</td></tr></tbody></table></section>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,securityLevel:"loose"});</script>
+</body></html>
