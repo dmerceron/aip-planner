@@ -32,6 +32,10 @@ let teamMembers = Object.entries(DEFAULT_PEOPLE_BY_TEAM).flatMap(([team, people]
   name,
   team,
   role: "",
+  type: "",
+  capacityGrouping: "",
+  platformFte: "",
+  fteCount: "",
   leave: []
 })));
 let teams = Object.entries(DEFAULT_PEOPLE_BY_TEAM).map(([name, people]) => ({
@@ -57,7 +61,9 @@ const state = {
   lastPointer: null,
   selectedActivityIds: new Set(),
   activitySelectionAnchor: "",
+  activitySort: { key: "", direction: "asc" },
   bulkCommonTags: [],
+  bulkCommonPeople: [],
   activityDataRevision: 0
 };
 
@@ -68,7 +74,7 @@ const elements = Object.fromEntries([
   "loadingState", "emptyState", "renderStatus", "zoomValue", "activityTableBody",
   "activityTableCount", "activityTableSearch", "peopleTableBody", "peopleTableCount", "peopleTableSearch",
   "teamsTableBody", "teamsTableCount", "teamsTableSearch", "releaseRibbon", "releaseTrack", "dateGuide", "dateTooltip",
-  "activitySelectionCount", "selectVisibleActivities", "bulkActivityWorkstream", "applyBulkWorkstream", "bulkActivityRelease", "applyBulkRelease", "bulkActivityTags", "applyBulkTags", "clearActivitySelection", "deleteSelectedActivities", "bulkActivityStatus"
+  "activitySelectionCount", "selectVisibleActivities", "bulkActivityWorkstream", "applyBulkWorkstream", "bulkActivityRelease", "applyBulkRelease", "bulkActivityPriority", "applyBulkPriority", "bulkActivitySponsor", "applyBulkSponsor", "bulkActivityEffort", "applyBulkEffort", "bulkActivityDuration", "applyBulkDuration", "bulkActivityPeoplePicker", "bulkActivityPeopleSummary", "bulkActivityPeopleList", "applyBulkPeople", "bulkActivityTags", "applyBulkTags", "clearActivitySelection", "deleteSelectedActivities", "bulkActivityStatus"
 ].map(id => [id, document.getElementById(id)]));
 
 mermaid.initialize({
@@ -137,6 +143,8 @@ function parseSource(source) {
       startDate: dates[0] || "",
       durationDays: modifiers.includes("milestone") ? 0 : workingDaysInclusive(dates[0], dates[1] || dates[0]),
       effortDays: "",
+      priority: "",
+      sponsor: "",
       owners,
       taskId,
       modifiers,
@@ -735,7 +743,7 @@ function rebuildPeopleIndex() {
 }
 
 function saveWorkspace() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 4, sections: state.parsed.sections, teamMembers, teams, activityDataRevision: state.activityDataRevision }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 6, sections: state.parsed.sections, teamMembers, teams, activityDataRevision: state.activityDataRevision }));
 }
 
 function loadStoredWorkspace() {
@@ -834,6 +842,26 @@ async function mergeSourceActivityData() {
   state.activityDataRevision = revision;
 }
 
+function normalizePlatformFte(value) {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["yes", "y", "true", "1"].includes(normalized)) return true;
+  if (["no", "n", "false", "0"].includes(normalized)) return false;
+  return "";
+}
+
+function platformFteLabel(value) {
+  const normalized = normalizePlatformFte(value);
+  return normalized === true ? "Yes" : normalized === false ? "No" : "";
+}
+
+function normalizeFteCount(value) {
+  if (value === "" || value === null || value === undefined) return "";
+  const count = Number(value);
+  return Number.isFinite(count) && count >= 0 ? count : "";
+}
+
 function normalizeWorkspace() {
   const seenTaskIds = new Set();
   for (const section of state.parsed.sections) {
@@ -849,6 +877,8 @@ function normalizeWorkspace() {
       task.owners = Array.isArray(task.owners) ? task.owners : [];
       task.dependencies = Array.isArray(task.dependencies) ? task.dependencies : [];
       task.jira = String(task.jira || "").trim();
+      task.priority = String(task.priority || "").trim();
+      task.sponsor = String(task.sponsor || "").trim();
       task.tags = normalizeTags(task.tags);
       if (task.startDate === undefined) task.startDate = task.dates[0] || "";
       if (!Number.isFinite(Number(task.durationDays))) task.durationDays = taskType(task) === "milestone" ? 0 : workingDaysInclusive(task.dates[0], task.dates[1] || task.dates[0]);
@@ -859,10 +889,15 @@ function normalizeWorkspace() {
     }
   }
   teamMembers = teamMembers.map((member, index) => ({
+    ...member,
     id: member.id || `member-${index}-${String(member.name || "person").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
     name: member.name || "Unnamed team member",
     team: String(member.team || "").trim(),
     role: String(member.role || "").trim(),
+    type: String(member.type || "").trim(),
+    capacityGrouping: String(member.capacityGrouping || "").trim(),
+    platformFte: normalizePlatformFte(member.platformFte),
+    fteCount: normalizeFteCount(member.fteCount),
     leave: Array.isArray(member.leave) ? member.leave.filter(period => period?.from && period?.to) : []
   }));
   const memberTeams = [...new Set(teamMembers.map(member => member.team).filter(Boolean))];
@@ -915,10 +950,64 @@ function displayJira(value) {
 
 function filteredActivityRows() {
   const query = elements.activityTableSearch.value.trim().toLowerCase();
-  return allTasksWithSections().filter(({ task, section }) => {
-    const haystack = [task.name, task.jira, workstreamForSectionName(section.name), task.release, ...normalizeTags(task.tags), ...(task.owners || [])].join(" ").toLowerCase();
+  const rows = allTasksWithSections().filter(({ task, section }) => {
+    const haystack = [task.name, task.priority, task.sponsor, task.jira, workstreamForSectionName(section.name), task.release, ...normalizeTags(task.tags), ...(task.owners || [])].join(" ").toLowerCase();
     return !query || haystack.includes(query);
   });
+  return sortActivityRows(rows);
+}
+
+function activitySortValue(task, section, key, taskNameById = new Map()) {
+  const values = {
+    name: task.name,
+    priority: task.priority,
+    sponsor: task.sponsor,
+    jira: displayJira(task.jira),
+    workstream: workstreamForSectionName(section.name),
+    release: task.release,
+    tags: normalizeTags(task.tags).join(", "),
+    start: task.dates?.[0] || "",
+    duration: taskType(task) === "milestone" ? "" : task.durationDays,
+    effort: task.effortDays,
+    end: task.dates?.[1] || task.dates?.[0] || "",
+    people: (task.owners || []).join(", "),
+    dependencies: (task.dependencies || []).map(id => taskNameById.get(id) || id).join(", ")
+  };
+  return values[key] ?? "";
+}
+
+function sortActivityRows(rows) {
+  const { key, direction } = state.activitySort;
+  if (!key) return rows;
+  const multiplier = direction === "desc" ? -1 : 1;
+  const taskNameById = new Map(allTasksWithSections().map(({ task }) => [task.taskId, task.name]));
+  return rows.map((record, index) => ({ record, index })).sort((left, right) => {
+    const leftValue = activitySortValue(left.record.task, left.record.section, key, taskNameById);
+    const rightValue = activitySortValue(right.record.task, right.record.section, key, taskNameById);
+    const leftBlank = leftValue === "" || leftValue === null || leftValue === undefined;
+    const rightBlank = rightValue === "" || rightValue === null || rightValue === undefined;
+    if (leftBlank || rightBlank) return leftBlank === rightBlank ? left.index - right.index : leftBlank ? 1 : -1;
+    if (typeof leftValue === "number" && typeof rightValue === "number") return (leftValue - rightValue) * multiplier || left.index - right.index;
+    return String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: "base" }) * multiplier || left.index - right.index;
+  }).map(item => item.record);
+}
+
+function renderActivitySortHeaders() {
+  document.querySelectorAll(".activity-table .table-sort").forEach(button => {
+    const active = button.dataset.sortKey === state.activitySort.key;
+    button.classList.toggle("is-ascending", active && state.activitySort.direction === "asc");
+    button.classList.toggle("is-descending", active && state.activitySort.direction === "desc");
+    button.setAttribute("aria-pressed", String(active));
+    button.closest("th")?.setAttribute("aria-sort", active ? state.activitySort.direction === "asc" ? "ascending" : "descending" : "none");
+  });
+}
+
+function sortActivitiesBy(key) {
+  state.activitySort = {
+    key,
+    direction: state.activitySort.key === key && state.activitySort.direction === "asc" ? "desc" : "asc"
+  };
+  renderActivityEditor();
 }
 
 function updateActivitySelectionControls(rows) {
@@ -929,6 +1018,11 @@ function updateActivitySelectionControls(rows) {
   elements.activitySelectionCount.textContent = `${selectedCount} selected`;
   elements.applyBulkWorkstream.disabled = selectedCount === 0;
   elements.applyBulkRelease.disabled = selectedCount === 0;
+  elements.applyBulkPriority.disabled = selectedCount === 0;
+  elements.applyBulkSponsor.disabled = selectedCount === 0;
+  elements.applyBulkEffort.disabled = selectedCount === 0;
+  elements.applyBulkDuration.disabled = selectedCount === 0;
+  elements.applyBulkPeople.disabled = selectedCount === 0;
   elements.applyBulkTags.disabled = selectedCount === 0;
   elements.clearActivitySelection.disabled = selectedCount === 0;
   elements.deleteSelectedActivities.disabled = selectedCount === 0;
@@ -938,6 +1032,31 @@ function updateActivitySelectionControls(rows) {
     : [];
   state.bulkCommonTags = commonTags;
   elements.bulkActivityTags.value = commonTags.join(", ");
+  renderBulkActivityPeoplePicker(selectedTasks);
+}
+
+function commonPeopleForTasks(tasks) {
+  if (!tasks.length) return [];
+  const commonKeys = new Set((tasks[0].owners || []).map(person => String(person).trim().toLowerCase()).filter(Boolean));
+  for (const task of tasks.slice(1)) {
+    const ownerKeys = new Set((task.owners || []).map(person => String(person).trim().toLowerCase()).filter(Boolean));
+    for (const person of commonKeys) if (!ownerKeys.has(person)) commonKeys.delete(person);
+  }
+  return allPeople.filter(person => commonKeys.has(person.toLowerCase()));
+}
+
+function peopleInAlphabeticalOrder() {
+  return [...allPeople].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+}
+
+function renderBulkActivityPeoplePicker(selectedTasks) {
+  const commonPeople = commonPeopleForTasks(selectedTasks);
+  state.bulkCommonPeople = commonPeople;
+  elements.bulkActivityPeopleSummary.textContent = !selectedTasks.length
+    ? "Choose people"
+    : commonPeople.length ? commonPeople.join(", ") : "No people in common";
+  const commonKeys = new Set(commonPeople.map(person => person.toLowerCase()));
+  elements.bulkActivityPeopleList.innerHTML = peopleInAlphabeticalOrder().map(person => `<label class="people-picker-option"><input type="checkbox" value="${escapeHtml(person)}" ${commonKeys.has(person.toLowerCase()) ? "checked" : ""}><span>${escapeHtml(person)}</span></label>`).join("") || '<span class="empty-inline">No people recorded</span>';
 }
 
 function renderBulkActivityWorkstreams() {
@@ -949,6 +1068,7 @@ function renderBulkActivityWorkstreams() {
 
 function renderActivityEditor() {
   if (!elements.activityTableBody) return;
+  renderActivitySortHeaders();
   renderBulkActivityWorkstreams();
   const rows = filteredActivityRows();
   const taskNameById = new Map(allTasksWithSections().map(({ task }) => [task.taskId, task.name]));
@@ -957,17 +1077,19 @@ function renderActivityEditor() {
     const selected = state.selectedActivityIds.has(task.taskId);
     const selectionClass = [selected ? "activity-selected" : "", selected && state.activitySelectionAnchor === task.taskId ? "activity-selection-anchor" : ""].filter(Boolean).join(" ");
     return `<tr data-task-id="${escapeHtml(task.taskId)}" class="${selectionClass}" tabindex="0" aria-selected="${selected}">
-      <td>${escapeHtml(task.name)}</td>
-      <td>${task.jira ? `<span class="jira-ticket" title="${escapeHtml(task.jira)}">${escapeHtml(displayJira(task.jira))}</span>` : '<span class="empty-inline">—</span>'}</td>
-      <td>${escapeHtml(workstreamForSectionName(section.name))}</td>
-      <td>${releaseBadge(task.release)}</td>
-      <td>${escapeHtml(normalizeTags(task.tags).join(", "))}</td>
-      <td>${escapeHtml(task.dates?.[0] || "")}${task.startDate ? "" : '<div class="cell-subtle">Auto-scheduled</div>'}${task.scheduleError ? `<div class="schedule-error">${escapeHtml(task.scheduleError)}</div>` : ""}</td>
-      <td>${taskType(task) === "milestone" ? "—" : `${escapeHtml(task.durationDays)} wd`}</td>
-      <td>${task.effortDays === "" ? '<span class="empty-inline">—</span>' : `${escapeHtml(task.effortDays)} d`}</td>
-      <td>${escapeHtml(task.dates?.[1] || task.dates?.[0] || "")}</td>
-      <td>${escapeHtml((task.owners || []).join(", ") || "—")}</td>
-      <td>${escapeHtml(dependencies.join(", ") || "—")}</td>
+      <td data-edit-key="name">${escapeHtml(task.name)}</td>
+      <td data-edit-key="priority">${task.priority ? escapeHtml(task.priority) : '<span class="empty-inline">—</span>'}</td>
+      <td data-edit-key="sponsor">${task.sponsor ? escapeHtml(task.sponsor) : '<span class="empty-inline">—</span>'}</td>
+      <td data-edit-key="jira">${task.jira ? `<span class="jira-ticket" title="${escapeHtml(task.jira)}">${escapeHtml(displayJira(task.jira))}</span>` : '<span class="empty-inline">—</span>'}</td>
+      <td data-edit-key="workstream">${escapeHtml(workstreamForSectionName(section.name))}</td>
+      <td data-edit-key="release">${releaseBadge(task.release)}</td>
+      <td data-edit-key="tags">${escapeHtml(normalizeTags(task.tags).join(", "))}</td>
+      <td data-edit-key="start">${escapeHtml(task.dates?.[0] || "")}${task.startDate ? "" : '<div class="cell-subtle">Auto-scheduled</div>'}${task.scheduleError ? `<div class="schedule-error">${escapeHtml(task.scheduleError)}</div>` : ""}</td>
+      <td data-edit-key="duration">${taskType(task) === "milestone" ? "—" : `${escapeHtml(task.durationDays)} wd`}</td>
+      <td data-edit-key="effort">${task.effortDays === "" ? '<span class="empty-inline">—</span>' : `${escapeHtml(task.effortDays)} d`}</td>
+      <td data-edit-key="end">${escapeHtml(task.dates?.[1] || task.dates?.[0] || "")}</td>
+      <td data-edit-key="people">${escapeHtml((task.owners || []).join(", ") || "—")}</td>
+      <td data-edit-key="dependencies">${escapeHtml(dependencies.join(", ") || "—")}</td>
       <td><div class="table-row-actions"><button class="table-action edit-task" type="button">Edit</button><button class="table-action danger delete-task" type="button">Delete</button></div></td>
     </tr>`;
   }).join("");
@@ -1025,6 +1147,95 @@ function applyBulkActivityWorkstream() {
     : `${selectedRecords.length} ${selectedRecords.length === 1 ? "activity" : "activities"} cleared of workstream allocation.`;
 }
 
+function selectedActivityRecords() {
+  return allTasksWithSections().filter(({ task }) => state.selectedActivityIds.has(task.taskId));
+}
+
+function setBulkActivityStatus(message, { error = false } = {}) {
+  elements.bulkActivityStatus.textContent = message;
+  elements.bulkActivityStatus.classList.toggle("is-error", error);
+}
+
+function applyBulkActivityPriority() {
+  const selectedRecords = selectedActivityRecords();
+  if (!selectedRecords.length) return;
+  const priority = elements.bulkActivityPriority.value.trim();
+  selectedRecords.forEach(({ task }) => { task.priority = priority; });
+  refreshEditorsAndPlan();
+  setBulkActivityStatus(priority
+    ? `${selectedRecords.length} ${selectedRecords.length === 1 ? "activity" : "activities"} set to priority ${priority}.`
+    : `${selectedRecords.length} ${selectedRecords.length === 1 ? "activity" : "activities"} cleared of priority.`);
+}
+
+function applyBulkActivitySponsor() {
+  const selectedRecords = selectedActivityRecords();
+  if (!selectedRecords.length) return;
+  const sponsor = elements.bulkActivitySponsor.value.trim();
+  selectedRecords.forEach(({ task }) => { task.sponsor = sponsor; });
+  refreshEditorsAndPlan();
+  setBulkActivityStatus(sponsor
+    ? `${selectedRecords.length} ${selectedRecords.length === 1 ? "activity" : "activities"} set to sponsor ${sponsor}.`
+    : `${selectedRecords.length} ${selectedRecords.length === 1 ? "activity" : "activities"} cleared of sponsor.`);
+}
+
+function applyBulkActivityEffort() {
+  const selectedRecords = selectedActivityRecords();
+  if (!selectedRecords.length) return;
+  const effortValue = elements.bulkActivityEffort.value.trim();
+  const effort = effortValue === "" ? "" : Number(effortValue);
+  if (effort !== "" && (!Number.isFinite(effort) || effort < 0)) {
+    setBulkActivityStatus("Effort must be zero or a positive number of person-days.", { error: true });
+    return;
+  }
+  selectedRecords.forEach(({ task }) => { task.effortDays = effort; });
+  refreshEditorsAndPlan();
+  setBulkActivityStatus(effort === ""
+    ? `${selectedRecords.length} ${selectedRecords.length === 1 ? "activity" : "activities"} cleared of effort.`
+    : `${selectedRecords.length} ${selectedRecords.length === 1 ? "activity" : "activities"} set to ${effort} person-days of effort.`);
+}
+
+function applyBulkActivityDuration() {
+  const selectedRecords = selectedActivityRecords();
+  if (!selectedRecords.length) return;
+  const durationValue = elements.bulkActivityDuration.value.trim();
+  const duration = Number(durationValue);
+  if (durationValue === "" || !Number.isInteger(duration) || duration < 1) {
+    setBulkActivityStatus("Duration must be at least one whole working day.", { error: true });
+    return;
+  }
+  const activities = selectedRecords.filter(({ task }) => taskType(task) !== "milestone");
+  if (!activities.length) {
+    setBulkActivityStatus("Duration cannot be applied to milestones.", { error: true });
+    return;
+  }
+  activities.forEach(({ task }) => { task.durationDays = duration; });
+  refreshEditorsAndPlan();
+  const activityLabel = `${activities.length} ${activities.length === 1 ? "activity" : "activities"}`;
+  const milestoneNote = activities.length !== selectedRecords.length ? " Milestones were unchanged." : "";
+  setBulkActivityStatus(`${activityLabel} set to ${duration} working days.${milestoneNote}`);
+}
+
+function applyBulkActivityPeople() {
+  const selectedRecords = selectedActivityRecords();
+  if (!selectedRecords.length) return;
+  const replacement = [...elements.bulkActivityPeopleList.querySelectorAll("input:checked")].map(input => input.value);
+  const commonKeys = new Set(state.bulkCommonPeople.map(person => person.toLowerCase()));
+  selectedRecords.forEach(({ task }) => {
+    const activitySpecificPeople = (task.owners || []).filter(person => !commonKeys.has(String(person).toLowerCase()));
+    const seen = new Set();
+    task.owners = [...activitySpecificPeople, ...replacement].filter(person => {
+      const key = String(person).toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  });
+  refreshEditorsAndPlan();
+  setBulkActivityStatus(replacement.length
+    ? `Common people updated on ${selectedRecords.length} ${selectedRecords.length === 1 ? "activity" : "activities"}; activity-specific people were preserved.`
+    : `Common people removed from ${selectedRecords.length} ${selectedRecords.length === 1 ? "activity" : "activities"}; activity-specific people were preserved.`);
+}
+
 function applyBulkActivityTags() {
   if (!state.selectedActivityIds.size) return;
   const replacement = normalizeTags(elements.bulkActivityTags.value);
@@ -1065,6 +1276,8 @@ function populateActivityDialog(taskId = "") {
   document.getElementById("activityDialogTitle").textContent = task ? "Edit activity" : "Add activity";
   document.getElementById("activityEditId").value = task?.taskId || "";
   document.getElementById("activityName").value = task?.name || "";
+  document.getElementById("activityPriority").value = task?.priority || "";
+  document.getElementById("activitySponsor").value = task?.sponsor || "";
   document.getElementById("activityJira").value = task?.jira || "";
   document.getElementById("activityTags").value = normalizeTags(task?.tags).join(", ");
   document.getElementById("activityType").value = task ? taskType(task) : "activity";
@@ -1098,6 +1311,8 @@ function saveActivityFromForm(event) {
   const effortValue = document.getElementById("activityEffort").value.trim();
   const effort = effortValue === "" ? "" : Number(effortValue);
   const jira = document.getElementById("activityJira").value.trim();
+  const priority = document.getElementById("activityPriority").value.trim();
+  const sponsor = document.getElementById("activitySponsor").value.trim();
   const dependencies = [...document.getElementById("activityDependencies").selectedOptions].map(option => option.value);
   const error = document.getElementById("activityFormError");
   if (!name || (!start && !dependencies.length) || (start && !isWorkingDay(start))) {
@@ -1127,6 +1342,8 @@ function saveActivityFromForm(event) {
   const current = allTasksWithSections().find(({ task }) => task.taskId === id);
   const task = current?.task || { taskId: proposedId, metadata: "" };
   task.name = name;
+  task.priority = priority;
+  task.sponsor = sponsor;
   task.jira = jira;
   task.startDate = start;
   task.durationDays = type === "milestone" ? 0 : duration;
@@ -1143,6 +1360,158 @@ function saveActivityFromForm(event) {
   refreshEditorsAndPlan({ resetPlanFilters: true });
 }
 
+function inlineActivityValue(task, section, key) {
+  const values = {
+    name: task.name,
+    priority: task.priority || "",
+    sponsor: task.sponsor || "",
+    jira: task.jira || "",
+    workstream: workstreamForSectionName(section.name),
+    release: task.release || "",
+    tags: normalizeTags(task.tags).join(", "),
+    start: task.startDate || task.dates?.[0] || "",
+    duration: task.durationDays,
+    effort: task.effortDays === "" ? "" : task.effortDays
+  };
+  return values[key] ?? "";
+}
+
+function showInlineActivityError(input, message) {
+  input.setAttribute("aria-invalid", "true");
+  input.setCustomValidity(message);
+  input.reportValidity();
+}
+
+function updateInlineActivityValue(record, key, value) {
+  const { task, section } = record;
+  const text = String(value ?? "").trim();
+  if (key === "name") {
+    if (!text) return "Name is required.";
+    const duplicate = allTasksWithSections().some(({ task: candidate }) => candidate.taskId !== task.taskId && activityIdentity(candidate.name, candidate.jira) === activityIdentity(text, task.jira));
+    if (duplicate) return "An activity with this name and Jira ID already exists.";
+    task.name = text;
+  } else if (key === "priority" || key === "sponsor") {
+    task[key] = text;
+  } else if (key === "jira") {
+    const duplicate = allTasksWithSections().some(({ task: candidate }) => candidate.taskId !== task.taskId && activityIdentity(candidate.name, candidate.jira) === activityIdentity(task.name, text));
+    if (duplicate) return "An activity with this name and Jira ID already exists.";
+    task.jira = text;
+  } else if (key === "workstream") {
+    const targetSection = sectionForWorkstream(text, { create: true });
+    if (targetSection !== section) {
+      section.tasks = section.tasks.filter(candidate => candidate !== task);
+      targetSection.tasks.push(task);
+    }
+  } else if (key === "release") {
+    task.release = /^R[4-7]$/.test(text) ? text : "";
+  } else if (key === "tags") {
+    task.tags = normalizeTags(text);
+  } else if (key === "start") {
+    if (!text && !(task.dependencies || []).length) return "Provide a start date or at least one dependency.";
+    if (text && !isWorkingDay(text)) return "Start date must be a Monday to Friday working day.";
+    task.startDate = text;
+  } else if (key === "duration") {
+    const duration = Number(text);
+    if (!Number.isInteger(duration) || duration < 1) return "Duration must be at least one whole working day.";
+    task.durationDays = duration;
+  } else if (key === "effort") {
+    const effort = text === "" ? "" : Number(text);
+    if (effort !== "" && (!Number.isFinite(effort) || effort < 0)) return "Effort must be zero or a positive number of person-days.";
+    task.effortDays = effort;
+  }
+  return "";
+}
+
+function startInlinePeopleEdit(cell, record) {
+  const { task } = record;
+  const selectedKeys = new Set((task.owners || []).map(person => String(person).toLowerCase()));
+  const editor = document.createElement("div");
+  editor.className = "activity-inline-people-editor";
+  editor.innerHTML = `
+    <div class="activity-inline-people-list">${peopleInAlphabeticalOrder().map(person => `<label class="people-picker-option"><input type="checkbox" value="${escapeHtml(person)}" ${selectedKeys.has(person.toLowerCase()) ? "checked" : ""}><span>${escapeHtml(person)}</span></label>`).join("") || '<span class="empty-inline">No people recorded</span>'}</div>
+    <div class="activity-inline-people-actions"><button type="button" class="cancel-inline-people">Cancel</button><button type="button" class="save-inline-people">Save people</button></div>`;
+  const finish = (save) => {
+    if (save) task.owners = [...editor.querySelectorAll("input:checked")].map(input => input.value);
+    refreshEditorsAndPlan();
+  };
+  editor.addEventListener("click", event => event.stopPropagation());
+  editor.addEventListener("dblclick", event => event.stopPropagation());
+  editor.addEventListener("keydown", event => {
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      finish(false);
+    }
+  });
+  editor.querySelector(".save-inline-people").addEventListener("click", () => finish(true));
+  editor.querySelector(".cancel-inline-people").addEventListener("click", () => finish(false));
+  cell.replaceChildren(editor);
+  editor.querySelector("input, button")?.focus();
+}
+
+function startInlineActivityEdit(cell, taskId, key) {
+  if (cell.querySelector(".activity-inline-editor")) return;
+  const record = allTasksWithSections().find(item => item.task.taskId === taskId);
+  if (!record) return;
+  const { task } = record;
+  if (key === "people") {
+    startInlinePeopleEdit(cell, record);
+    return;
+  }
+  if (["dependencies", "end"].includes(key) || (key === "duration" && taskType(task) === "milestone")) {
+    populateActivityDialog(taskId);
+    return;
+  }
+
+  const initialValue = String(inlineActivityValue(task, record.section, key));
+  const isSelect = ["workstream", "release"].includes(key);
+  const input = document.createElement(isSelect ? "select" : "input");
+  input.className = "activity-inline-editor";
+  input.dataset.initialValue = initialValue;
+  if (isSelect) {
+    const options = key === "workstream" ? ["", ...workstreamNames()] : ["", "R4", "R5", "R6", "R7"];
+    input.innerHTML = options.map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option || (key === "workstream" ? "No workstream" : "No release"))}</option>`).join("");
+    input.value = initialValue;
+  } else {
+    input.type = key === "start" ? "date" : ["duration", "effort"].includes(key) ? "number" : "text";
+    if (key === "duration") { input.min = "1"; input.step = "1"; }
+    if (key === "effort") { input.min = "0"; input.step = "0.5"; }
+    if (key === "name") input.maxLength = 180;
+    if (key === "priority") input.maxLength = 120;
+    if (key === "sponsor") input.maxLength = 180;
+    if (key === "jira") input.maxLength = 200;
+    if (key === "tags") input.maxLength = 300;
+    input.value = initialValue;
+  }
+
+  let completed = false;
+  const cancel = () => {
+    if (completed) return;
+    completed = true;
+    renderActivityEditor();
+  };
+  const commit = () => {
+    if (completed) return;
+    if (input.value === input.dataset.initialValue) return cancel();
+    const error = updateInlineActivityValue(record, key, input.value);
+    if (error) return showInlineActivityError(input, error);
+    completed = true;
+    refreshEditorsAndPlan();
+  };
+  input.addEventListener("click", event => event.stopPropagation());
+  input.addEventListener("dblclick", event => event.stopPropagation());
+  input.addEventListener("keydown", event => {
+    event.stopPropagation();
+    if (event.key === "Escape") { event.preventDefault(); cancel(); }
+    if (event.key === "Enter") { event.preventDefault(); commit(); }
+  });
+  input.addEventListener("blur", commit);
+  if (isSelect) input.addEventListener("change", commit);
+  cell.replaceChildren(input);
+  input.focus();
+  if (input.type === "text") input.select();
+}
+
 function deleteActivity(taskId) {
   const record = allTasksWithSections().find(({ task }) => task.taskId === taskId);
   if (!record || !confirm(`Delete “${record.task.name}”?`)) return;
@@ -1157,10 +1526,10 @@ function deleteActivity(taskId) {
 function renderPeopleEditor() {
   if (!elements.peopleTableBody) return;
   const query = elements.peopleTableSearch.value.trim().toLowerCase();
-  const members = teamMembers.filter(member => !query || `${member.name} ${member.team || "No team"} ${member.role || ""}`.toLowerCase().includes(query));
+  const members = teamMembers.filter(member => !query || `${member.name} ${member.team || "No team"} ${member.role || ""} ${member.type || ""} ${member.capacityGrouping || ""} ${platformFteLabel(member.platformFte)} ${member.fteCount}`.toLowerCase().includes(query));
   elements.peopleTableBody.innerHTML = members.map(member => {
     const leave = (member.leave || []).map((period, index) => `<span class="leave-chip">${escapeHtml(period.from)} → ${escapeHtml(period.to)}<button class="edit-leave" type="button" data-leave-index="${index}" title="Edit leave">Edit</button><button class="delete-leave" type="button" data-leave-index="${index}" title="Delete leave">×</button></span>`).join("");
-    return `<tr data-member-id="${escapeHtml(member.id)}"><td>${escapeHtml(member.name)}</td><td>${member.team ? escapeHtml(member.team) : '<span class="empty-inline">No team</span>'}</td><td>${member.role ? escapeHtml(member.role) : '<span class="empty-inline">No role recorded</span>'}</td><td><div class="leave-list">${leave || '<span class="empty-inline">No leave recorded</span>'}</div></td><td><div class="table-row-actions"><button class="table-action add-leave" type="button">Add leave</button><button class="table-action edit-member" type="button">Edit</button><button class="table-action danger delete-member" type="button">Delete</button></div></td></tr>`;
+    return `<tr data-member-id="${escapeHtml(member.id)}"><td>${escapeHtml(member.name)}</td><td>${member.team ? escapeHtml(member.team) : '<span class="empty-inline">No team</span>'}</td><td>${member.role ? escapeHtml(member.role) : '<span class="empty-inline">No role recorded</span>'}</td><td>${member.type ? escapeHtml(member.type) : '<span class="empty-inline">Not recorded</span>'}</td><td>${member.capacityGrouping ? escapeHtml(member.capacityGrouping) : '<span class="empty-inline">Not recorded</span>'}</td><td>${platformFteLabel(member.platformFte) || '<span class="empty-inline">Not recorded</span>'}</td><td>${member.fteCount === "" ? '<span class="empty-inline">Not recorded</span>' : escapeHtml(member.fteCount)}</td><td><div class="leave-list">${leave || '<span class="empty-inline">No leave recorded</span>'}</div></td><td><div class="table-row-actions"><button class="table-action add-leave" type="button">Add leave</button><button class="table-action edit-member" type="button">Edit</button><button class="table-action danger delete-member" type="button">Delete</button></div></td></tr>`;
   }).join("");
   elements.peopleTableCount.textContent = `${members.length} of ${teamMembers.length} team members`;
 }
@@ -1171,6 +1540,10 @@ function openMemberDialog(memberId = "") {
   document.getElementById("memberEditId").value = member?.id || "";
   document.getElementById("memberName").value = member?.name || "";
   document.getElementById("memberRole").value = member?.role || "";
+  document.getElementById("memberType").value = member?.type || "";
+  document.getElementById("memberCapacityGrouping").value = member?.capacityGrouping || "";
+  document.getElementById("memberPlatformFte").value = normalizePlatformFte(member?.platformFte) === true ? "yes" : normalizePlatformFte(member?.platformFte) === false ? "no" : "";
+  document.getElementById("memberFteCount").value = member?.fteCount === "" || member?.fteCount === undefined ? "" : member.fteCount;
   const teamSelect = document.getElementById("memberTeam");
   teamSelect.innerHTML = `<option value="">No team</option>${teams.map(team => `<option value="${escapeHtml(team.name)}">${escapeHtml(team.name)}</option>`).join("")}`;
   teamSelect.value = member?.team || "";
@@ -1184,9 +1557,14 @@ function saveMemberFromForm(event) {
   const name = document.getElementById("memberName").value.trim();
   const team = document.getElementById("memberTeam").value.trim();
   const role = document.getElementById("memberRole").value.trim();
+  const type = document.getElementById("memberType").value.trim();
+  const capacityGrouping = document.getElementById("memberCapacityGrouping").value.trim();
+  const platformFte = normalizePlatformFte(document.getElementById("memberPlatformFte").value);
+  const fteCount = normalizeFteCount(document.getElementById("memberFteCount").value);
   const duplicate = teamMembers.find(member => member.name.toLowerCase() === name.toLowerCase() && member.id !== id);
-  if (!name || duplicate) {
-    document.getElementById("memberFormError").textContent = duplicate ? "A team member with this name already exists." : "Name is required.";
+  const rawFteCount = document.getElementById("memberFteCount").value.trim();
+  if (!name || duplicate || (rawFteCount !== "" && fteCount === "")) {
+    document.getElementById("memberFormError").textContent = duplicate ? "A team member with this name already exists." : !name ? "Name is required." : "FTE count must be zero or a positive number.";
     return;
   }
   const member = teamMembers.find(item => item.id === id);
@@ -1196,13 +1574,17 @@ function saveMemberFromForm(event) {
     member.name = name;
     member.team = team;
     member.role = role;
+    member.type = type;
+    member.capacityGrouping = capacityGrouping;
+    member.platformFte = platformFte;
+    member.fteCount = fteCount;
     if (oldTeam !== team) {
       const previousTeam = teams.find(item => item.name === oldTeam);
       if (previousTeam?.leadMemberId === member.id) previousTeam.leadMemberId = "";
     }
     for (const { task } of allTasksWithSections()) task.owners = (task.owners || []).map(owner => owner === oldName ? name : owner);
   } else {
-    teamMembers.push({ id: `member-${Date.now().toString(36)}`, name, team, role, leave: [] });
+    teamMembers.push({ id: `member-${Date.now().toString(36)}`, name, team, role, type, capacityGrouping, platformFte, fteCount, leave: [] });
   }
   document.getElementById("memberDialog").close();
   refreshEditorsAndPlan({ resetPlanFilters: true });
@@ -1343,7 +1725,7 @@ function completeMermaidSource() {
 }
 
 function exportMarkdownPlan() {
-  const plannerData = JSON.stringify({ version: 4, sections: state.parsed.sections, teamMembers, teams }, null, 2);
+  const plannerData = JSON.stringify({ version: 6, sections: state.parsed.sections, teamMembers, teams }, null, 2);
   const markdown = `# AI Platform FY27 editable delivery plan\n\n## Mermaid Gantt chart\n\n\`\`\`mermaid\n${completeMermaidSource()}\n\`\`\`\n\n## Planner data\n\n\`\`\`json\n${plannerData}\n\`\`\`\n`;
   downloadBlob(new Blob([markdown], { type: "text/markdown;charset=utf-8" }), "ai-platform-fy27-editable-plan.md");
 }
@@ -1392,20 +1774,29 @@ async function importFeatures(file) {
 function exportExcelPlan() {
   const workbook = XLSX.utils.book_new();
   const activities = allTasksWithSections().map(({ task, section }) => ({
-    ID: task.taskId, Name: task.name, "Jira Ticket": task.jira || "", Workstream: workstreamForSectionName(section.name), Type: taskType(task), Release: task.release || "", Tags: normalizeTags(task.tags).join("; "),
+    ID: task.taskId, Name: task.name, Priority: task.priority || "", Sponsor: task.sponsor || "", "Jira Ticket": task.jira || "", Workstream: workstreamForSectionName(section.name), Type: taskType(task), Release: task.release || "", Tags: normalizeTags(task.tags).join("; "),
     "Start (optional)": task.startDate || "", "Duration (work days)": task.durationDays, "Effort (days)": task.effortDays === "" ? "" : task.effortDays, "Calculated Start": task.dates?.[0] || "",
     "Calculated End": task.dates?.[1] || task.dates?.[0] || "", People: (task.owners || []).join("; ")
   }));
   const dependencies = allTasksWithSections().flatMap(({ task }) => (task.dependencies || []).map(dependency => ({ "Activity ID": task.taskId, "Depends On ID": dependency })));
   const teamRows = teams.map(team => ({ ID: team.id, Team: team.name, "Lead Member ID": team.leadMemberId || "", "Team Lead": teamMembers.find(member => member.id === team.leadMemberId)?.name || "" }));
-  const members = teamMembers.map(member => ({ ID: member.id, Name: member.name, Team: member.team, Role: member.role || "" }));
+  const members = teamMembers.map(member => ({
+    ID: member.id,
+    Name: member.name,
+    Team: member.team,
+    Role: member.role || "",
+    Type: member.type || "",
+    "Capacity Grouping": member.capacityGrouping || "",
+    "Platform FTE": platformFteLabel(member.platformFte),
+    "FTE Count": member.fteCount === "" ? "" : member.fteCount
+  }));
   const leave = teamMembers.flatMap(member => (member.leave || []).map(period => ({ "Member ID": member.id, Name: member.name, From: period.from, To: period.to })));
   const overview = [["AI Platform FY27 Planner"], ["Exported", new Date().toISOString()], ["Activities", activities.length], ["Teams", teamRows.length], ["Team members", members.length], ["Leave periods", leave.length], [], ["Import guidance"], ["Keep sheet names and ID columns unchanged. Multiple people are separated with semicolons."]];
   const sheets = {
     Overview: XLSX.utils.aoa_to_sheet(overview), Activities: XLSX.utils.json_to_sheet(activities), Dependencies: XLSX.utils.json_to_sheet(dependencies),
     Teams: XLSX.utils.json_to_sheet(teamRows), "Team Members": XLSX.utils.json_to_sheet(members), Leave: XLSX.utils.json_to_sheet(leave)
   };
-  const widths = { Overview: [30, 70], Activities: [20, 55, 18, 34, 16, 18, 18, 18, 22, 18, 18, 42], Dependencies: [24, 24], Teams: [28, 38, 28, 24], "Team Members": [28, 24, 38, 32], Leave: [28, 24, 16, 16] };
+  const widths = { Overview: [30, 70], Activities: [28, 55, 28, 34, 18, 34, 16, 18, 22, 18, 18, 18, 22, 18, 18, 42], Dependencies: [24, 24], Teams: [28, 38, 28, 24], "Team Members": [28, 28, 38, 38, 22, 30, 16, 14], Leave: [28, 24, 16, 16] };
   for (const [name, sheet] of Object.entries(sheets)) {
     sheet["!cols"] = (widths[name] || []).map(width => ({ wch: width }));
     XLSX.utils.book_append_sheet(workbook, sheet, name);
@@ -1420,18 +1811,44 @@ async function importExcelPlan(file) {
   if (!activities.length) throw new Error("The workbook must contain a populated Activities sheet.");
   const dependencies = rows("Dependencies");
   const importedTeams = rows("Teams");
-  const validImportedWorkstreams = importedTeams.length ? importedTeams.map(row => String(row.Team || "").trim()).filter(Boolean) : workstreamNames();
+  if (importedTeams.length) {
+    for (const row of importedTeams) {
+      const id = String(row.ID || "").trim();
+      const name = String(row.Team || "").trim();
+      if (!name) continue;
+      const existing = teams.find(team => (id && team.id === id) || team.name === name);
+      if (existing) {
+        const previousName = existing.name;
+        existing.name = name;
+        existing.leadMemberId = String(row["Lead Member ID"] || "").trim();
+        if (previousName !== name) {
+          for (const member of teamMembers) if (member.team === previousName) member.team = name;
+          for (const section of state.parsed.sections) if (section.name === previousName) section.name = name;
+        }
+      } else {
+        teams.push({ id: id || `team-${Date.now().toString(36)}-${teams.length}`, name, leadMemberId: String(row["Lead Member ID"] || "").trim() });
+      }
+    }
+  }
+  const validImportedWorkstreams = new Set(workstreamNames());
   const dependencyMap = new Map();
   for (const row of dependencies) {
     const id = String(row["Activity ID"] || "");
     if (!dependencyMap.has(id)) dependencyMap.set(id, []);
     if (row["Depends On ID"]) dependencyMap.get(id).push(String(row["Depends On ID"]));
   }
-  const sections = new Map();
+  const recordsByIdentity = new Map();
+  for (const record of allTasksWithSections()) {
+    const key = activityIdentity(record.task.name, record.task.jira);
+    if (!recordsByIdentity.has(key)) recordsByIdentity.set(key, record);
+  }
+  const importedIdToTaskId = new Map();
+  const importedTasks = [];
   for (const row of activities) {
+    const name = String(row.Name || "Untitled activity").trim() || "Untitled activity";
+    const jira = String(row["Jira Ticket"] || "").trim();
     const requestedWorkstream = String(row.Workstream || "").trim();
-    const sectionName = validImportedWorkstreams.includes(requestedWorkstream) ? requestedWorkstream : "Unassigned";
-    if (!sections.has(sectionName)) sections.set(sectionName, { name: sectionName, tasks: [] });
+    const targetSection = sectionForWorkstream(validImportedWorkstreams.has(requestedWorkstream) ? requestedWorkstream : "", { create: true });
     const type = String(row.Type || "activity").toLowerCase();
     const start = excelDate(row["Start (optional)"] ?? row.Start);
     const calculatedStart = excelDate(row["Calculated Start"] ?? row.Start);
@@ -1439,27 +1856,56 @@ async function importExcelPlan(file) {
     const importedDuration = Number(row["Duration (work days)"]);
     const importedEffortValue = row["Effort (days)"];
     const importedEffort = importedEffortValue === "" || importedEffortValue === null || importedEffortValue === undefined ? "" : Number(importedEffortValue);
-    const task = {
-      taskId: String(row.ID || `import-${Date.now().toString(36)}-${sections.get(sectionName).tasks.length}`), name: String(row.Name || "Untitled activity"), jira: String(row["Jira Ticket"] || "").trim(),
-      startDate: start, durationDays: type === "milestone" ? 0 : Number.isFinite(importedDuration) && importedDuration > 0 ? Math.round(importedDuration) : workingDaysInclusive(calculatedStart, calculatedEnd),
-      effortDays: Number.isFinite(importedEffort) && importedEffort >= 0 ? importedEffort : "",
-      dates: type === "milestone" ? [calculatedStart] : [calculatedStart, calculatedEnd], modifiers: type === "milestone" ? ["milestone"] : type === "crit" ? ["crit"] : [],
-      release: /^R[4-7]$/.test(String(row.Release)) ? String(row.Release) : "", tags: normalizeTags(row.Tags), owners: String(row.People || "").split(";").map(value => value.trim()).filter(Boolean),
-      dependencies: dependencyMap.get(String(row.ID)) || []
-    };
-    sections.get(sectionName).tasks.push(task);
+    const key = activityIdentity(name, jira);
+    const record = recordsByIdentity.get(key);
+    const task = record?.task || { taskId: uniqueActivityTaskId(name, jira), metadata: "", dependencies: [] };
+    if (record && record.section !== targetSection) {
+      record.section.tasks = record.section.tasks.filter(candidate => candidate !== task);
+      targetSection.tasks.push(task);
+      record.section = targetSection;
+    } else if (!record) {
+      targetSection.tasks.push(task);
+      recordsByIdentity.set(key, { task, section: targetSection });
+    }
+    task.name = name;
+    task.jira = jira;
+    if (Object.hasOwn(row, "Priority")) task.priority = String(row.Priority || "").trim();
+    if (Object.hasOwn(row, "Sponsor")) task.sponsor = String(row.Sponsor || "").trim();
+    task.startDate = start;
+    task.durationDays = type === "milestone" ? 0 : Number.isFinite(importedDuration) && importedDuration > 0 ? Math.round(importedDuration) : workingDaysInclusive(calculatedStart, calculatedEnd);
+    task.effortDays = Number.isFinite(importedEffort) && importedEffort >= 0 ? importedEffort : "";
+    task.dates = type === "milestone" ? [calculatedStart] : [calculatedStart, calculatedEnd];
+    task.modifiers = type === "milestone" ? ["milestone"] : type === "crit" ? ["crit"] : [];
+    task.release = /^R[4-7]$/.test(String(row.Release)) ? String(row.Release) : "";
+    task.tags = normalizeTags(row.Tags);
+    task.owners = String(row.People || "").split(";").map(value => value.trim()).filter(Boolean);
+    const importedId = String(row.ID || "").trim();
+    if (importedId) importedIdToTaskId.set(importedId, task.taskId);
+    importedTasks.push({ task, importedId });
   }
-  state.parsed.sections = [...sections.values()];
+  if (workbook.Sheets.Dependencies) {
+    for (const { task, importedId } of importedTasks) {
+      task.dependencies = (dependencyMap.get(importedId) || []).map(id => importedIdToTaskId.get(id) || id).filter(id => id && id !== task.taskId);
+    }
+  }
   const memberRows = rows("Team Members");
   if (memberRows.length) {
     const leaveRows = rows("Leave");
-    teamMembers = memberRows.map(row => ({
-      id: String(row.ID || `member-${Date.now().toString(36)}`), name: String(row.Name), team: String(row.Team), role: String(row.Role || "").trim(),
-      leave: leaveRows.filter(item => String(item["Member ID"]) === String(row.ID)).map(item => ({ from: excelDate(item.From), to: excelDate(item.To) }))
-    }));
-  }
-  if (importedTeams.length) {
-    teams = importedTeams.map(row => ({ id: String(row.ID || `team-${Date.now().toString(36)}`), name: String(row.Team), leadMemberId: String(row["Lead Member ID"] || "") }));
+    for (const row of memberRows) {
+      const id = String(row.ID || "").trim();
+      const name = String(row.Name || "").trim();
+      if (!name) continue;
+      const member = teamMembers.find(item => (id && item.id === id) || item.name === name) || { id: id || `member-${Date.now().toString(36)}-${teamMembers.length}`, leave: [] };
+      member.name = name;
+      member.team = String(row.Team || "").trim();
+      member.role = String(row.Role || "").trim();
+      member.type = String(row.Type || "").trim();
+      member.capacityGrouping = String(row["Capacity Grouping"] || "").trim();
+      member.platformFte = normalizePlatformFte(row["Platform FTE"] ?? row["Platform FTE Count"] ?? row["Platfrom FTE"] ?? row["Platfrom FTE Count"]);
+      member.fteCount = normalizeFteCount(row["FTE Count"]);
+      if (workbook.Sheets.Leave) member.leave = leaveRows.filter(item => String(item["Member ID"]) === id).map(item => ({ from: excelDate(item.From), to: excelDate(item.To) }));
+      if (!teamMembers.includes(member)) teamMembers.push(member);
+    }
   }
   normalizeWorkspace();
   refreshEditorsAndPlan({ resetPlanFilters: true });
@@ -1526,6 +1972,10 @@ function wireEvents() {
   });
   window.addEventListener("resize", updateTimelineGeometry);
   elements.activityTableSearch.addEventListener("input", renderActivityEditor);
+  document.querySelector("#activityTable thead").addEventListener("click", event => {
+    const button = event.target.closest(".table-sort");
+    if (button) sortActivitiesBy(button.dataset.sortKey);
+  });
   elements.selectVisibleActivities.addEventListener("click", () => {
     const visibleIds = filteredActivityRows().map(({ task }) => task.taskId);
     visibleIds.forEach(id => state.selectedActivityIds.add(id));
@@ -1535,6 +1985,11 @@ function wireEvents() {
   });
   elements.applyBulkWorkstream.addEventListener("click", applyBulkActivityWorkstream);
   elements.applyBulkRelease.addEventListener("click", applyBulkActivityRelease);
+  elements.applyBulkPriority.addEventListener("click", applyBulkActivityPriority);
+  elements.applyBulkSponsor.addEventListener("click", applyBulkActivitySponsor);
+  elements.applyBulkEffort.addEventListener("click", applyBulkActivityEffort);
+  elements.applyBulkDuration.addEventListener("click", applyBulkActivityDuration);
+  elements.applyBulkPeople.addEventListener("click", applyBulkActivityPeople);
   elements.applyBulkTags.addEventListener("click", applyBulkActivityTags);
   elements.clearActivitySelection.addEventListener("click", () => {
     state.selectedActivityIds.clear();
@@ -1552,7 +2007,14 @@ function wireEvents() {
     if (!row) return;
     if (event.target.closest(".edit-task")) populateActivityDialog(row.dataset.taskId);
     else if (event.target.closest(".delete-task")) deleteActivity(row.dataset.taskId);
+    else if (event.detail > 1) return;
     else selectActivityRow(row.dataset.taskId, { extendRange: event.shiftKey, toggle: event.ctrlKey || event.metaKey });
+  });
+  elements.activityTableBody.addEventListener("dblclick", event => {
+    const row = event.target.closest("tr[data-task-id]");
+    const cell = event.target.closest("td[data-edit-key]");
+    if (!row || !cell || event.target.closest("button")) return;
+    startInlineActivityEdit(cell, row.dataset.taskId, cell.dataset.editKey);
   });
   elements.activityTableBody.addEventListener("keydown", event => {
     const row = event.target.closest("tr[data-task-id]");

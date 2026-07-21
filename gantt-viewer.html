@@ -167,7 +167,7 @@
     <header class="management-toolbar">
       <div>
         <h2>Activities and milestones</h2>
-        <p>Edit effort, optional starts, working-day durations, owners, releases and dependencies.</p>
+        <p>Edit priority, sponsorship, effort, optional starts, working-day durations, owners, releases and dependencies.</p>
       </div>
       <div class="management-actions">
         <label class="table-search"><span class="sr-only">Search activities</span><input id="activityTableSearch" type="search" placeholder="Search activities…"></label>
@@ -190,6 +190,19 @@
       <button id="applyBulkWorkstream" class="button button-primary" type="button" disabled>Set workstream</button>
       <label class="bulk-release-field"><span>Release</span><select id="bulkActivityRelease"><option value=""></option><option>R4</option><option>R5</option><option>R6</option><option>R7</option></select></label>
       <button id="applyBulkRelease" class="button button-primary" type="button" disabled>Set release</button>
+      <label class="bulk-release-field bulk-priority-field"><span>Priority</span><input id="bulkActivityPriority" type="text" maxlength="120" placeholder="e.g. High"></label>
+      <button id="applyBulkPriority" class="button button-primary" type="button" disabled>Set priority</button>
+      <label class="bulk-release-field bulk-sponsor-field"><span>Sponsor</span><input id="bulkActivitySponsor" type="text" maxlength="180" placeholder="e.g. Sponsor name"></label>
+      <button id="applyBulkSponsor" class="button button-primary" type="button" disabled>Set sponsor</button>
+      <label class="bulk-release-field bulk-effort-field"><span>Effort</span><input id="bulkActivityEffort" type="number" min="0" step="any" placeholder="Person-days"></label>
+      <button id="applyBulkEffort" class="button button-primary" type="button" disabled>Set effort</button>
+      <label class="bulk-release-field bulk-duration-field"><span>Duration</span><input id="bulkActivityDuration" type="number" min="1" step="1" placeholder="Work days"></label>
+      <button id="applyBulkDuration" class="button button-primary" type="button" disabled>Set duration</button>
+      <details id="bulkActivityPeoplePicker" class="bulk-people-picker">
+        <summary><span>People</span><span id="bulkActivityPeopleSummary">Choose people</span></summary>
+        <div id="bulkActivityPeopleList" class="people-picker-list"></div>
+      </details>
+      <button id="applyBulkPeople" class="button button-primary" type="button" disabled>Update common people</button>
       <label class="bulk-release-field bulk-tags-field"><span>Tags</span><input id="bulkActivityTags" type="text" placeholder="tag1, tag2"></label>
       <button id="applyBulkTags" class="button button-primary" type="button" disabled>Replace common tags</button>
       <button id="clearActivitySelection" class="button" type="button" disabled>Clear selection</button>
@@ -197,8 +210,23 @@
       <span id="bulkActivityStatus" class="bulk-activity-status" role="status" aria-live="polite"></span>
     </div>
     <div class="table-shell">
-      <table class="data-table activity-table">
-        <thead><tr><th>Activity / milestone</th><th>Jira ticket</th><th>Workstream</th><th>Release</th><th>Tags</th><th>Start</th><th>Duration</th><th>Effort</th><th>End</th><th>People</th><th>Dependencies</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <table id="activityTable" class="data-table activity-table">
+        <thead><tr>
+          <th data-sort-key="name"><button class="table-sort" type="button" data-sort-key="name">Activity / milestone <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="priority"><button class="table-sort" type="button" data-sort-key="priority">Priority <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="sponsor"><button class="table-sort" type="button" data-sort-key="sponsor">Sponsor <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="jira"><button class="table-sort" type="button" data-sort-key="jira">Jira ticket <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="workstream"><button class="table-sort" type="button" data-sort-key="workstream">Workstream <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="release"><button class="table-sort" type="button" data-sort-key="release">Release <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="tags"><button class="table-sort" type="button" data-sort-key="tags">Tags <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="start"><button class="table-sort" type="button" data-sort-key="start">Start <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="duration"><button class="table-sort" type="button" data-sort-key="duration">Duration <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="effort"><button class="table-sort" type="button" data-sort-key="effort">Effort <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="end"><button class="table-sort" type="button" data-sort-key="end">End <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="people"><button class="table-sort" type="button" data-sort-key="people">People <span aria-hidden="true"></span></button></th>
+          <th data-sort-key="dependencies"><button class="table-sort" type="button" data-sort-key="dependencies">Dependencies <span aria-hidden="true"></span></button></th>
+          <th><span class="sr-only">Actions</span></th>
+        </tr></thead>
         <tbody id="activityTableBody"></tbody>
       </table>
     </div>
@@ -208,8 +236,8 @@
   <main id="peopleView" class="management-view hidden" role="tabpanel" aria-labelledby="peopleTab">
     <header class="management-toolbar">
       <div>
-        <h2>People, roles and leave</h2>
-        <p>Maintain team membership, roles and multiple leave periods for FY27.</p>
+        <h2>People, capacity and leave</h2>
+        <p>Maintain employment details, team membership, capacity and multiple leave periods for FY27.</p>
       </div>
       <div class="management-actions">
         <label class="table-search"><span class="sr-only">Search team members</span><input id="peopleTableSearch" type="search" placeholder="Search people…"></label>
@@ -218,7 +246,7 @@
     </header>
     <div class="table-shell">
       <table class="data-table people-table">
-        <thead><tr><th>Name</th><th>Team</th><th>Role</th><th>Leave periods</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <thead><tr><th>Name</th><th>Team</th><th>Role</th><th>Type</th><th>Capacity grouping</th><th>Platform FTE</th><th>FTE count</th><th>Leave periods</th><th><span class="sr-only">Actions</span></th></tr></thead>
         <tbody id="peopleTableBody"></tbody>
       </table>
     </div>
@@ -251,6 +279,8 @@
       <input id="activityEditId" type="hidden">
       <div class="form-grid">
         <label class="field field-wide"><span>Name</span><input id="activityName" required maxlength="180"></label>
+        <label class="field"><span>Priority <small>Optional</small></span><input id="activityPriority" maxlength="120" placeholder="e.g. H, M, L"></label>
+        <label class="field"><span>Sponsor <small>Optional</small></span><input id="activitySponsor" maxlength="180" placeholder="e.g. business sponsor"></label>
         <label class="field"><span>Jira ticket <small>Optional</small></span><input id="activityJira" maxlength="40" placeholder="e.g. AIP-1234"></label>
         <label class="field"><span>Workstream <small>Optional</small></span><select id="activityWorkstream"></select></label>
         <label class="field"><span>Type</span><select id="activityType"><option value="activity">Activity</option><option value="crit">Critical activity</option><option value="milestone">Milestone</option></select></label>
@@ -275,6 +305,10 @@
         <label class="field field-wide"><span>Name</span><input id="memberName" required maxlength="80"></label>
         <label class="field field-wide"><span>Team</span><select id="memberTeam"></select></label>
         <label class="field field-wide"><span>Role <small>Optional</small></span><input id="memberRole" maxlength="100" placeholder="e.g. Product Owner"></label>
+        <label class="field field-wide"><span>Type <small>Optional</small></span><input id="memberType" maxlength="80" placeholder="e.g. Employee, Labour Hire, Consultant"></label>
+        <label class="field field-wide"><span>Capacity grouping <small>Optional</small></span><input id="memberCapacityGrouping" maxlength="100" placeholder="e.g. Engineering Allocation"></label>
+        <label class="field"><span>Platform FTE</span><select id="memberPlatformFte"><option value="">Not recorded</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+        <label class="field"><span>FTE count <small>Optional</small></span><input id="memberFteCount" type="number" min="0" max="10" step="0.1" placeholder="e.g. 1 or 0.5"></label>
       </div>
       <p id="memberFormError" class="form-error" role="alert"></p>
       <div class="dialog-actions"><button class="button" type="button" data-close-dialog="memberDialog">Cancel</button><button class="button button-primary" type="submit">Save member</button></div>
@@ -305,6 +339,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="gantt-viewer.js?v=26"></script>
+  <script type="module" src="gantt-viewer.js?v=31"></script>
 </body>
 </html>

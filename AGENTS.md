@@ -35,7 +35,7 @@ Maintain the detailed AI Platform FY27 delivery plan for 03 August 2026 through 
 
 ## Planner data schema
 
-The current exported schema version is 4.
+The current exported schema version is 6.
 
 ### Activities and milestones
 
@@ -44,6 +44,8 @@ Each item belongs to a section/workstream and may contain:
 - The only business identity and duplicate key for an activity is the normalized pair `(name, jira)`. Never use Jira alone, a spreadsheet/source ID, or any other field as the unique key.
 - `taskId`: hidden stable technical identifier used by dependencies. Generate it for new activities from the `(name, jira)` pair, never display it as a subtitle, and never rewrite an existing value because saved dependencies may reference it.
 - `name`: activity or milestone name.
+- `priority`: optional free-text priority or prioritisation note. Preserve values such as `H`, `M`, `L`, or a longer supplied priority description.
+- `sponsor`: optional free-text sponsor.
 - `jira`: optional Jira ticket ID or URL. Preserve the stored value, but display only the extracted `FDAP-12345` key in activity tables when present.
 - `startDate`: optional explicit ISO date (`YYYY-MM-DD`).
 - `durationDays`: scheduled elapsed working days. Saturday and Sunday are non-working days.
@@ -55,6 +57,8 @@ Each item belongs to a section/workstream and may contain:
 - `owners`: zero or more person names.
 - `dependencies`: zero or more stable `taskId` values.
 
+The Excel `Activities` sheet exports and imports the columns `ID`, `Name`, `Priority`, `Sponsor`, `Jira Ticket`, `Workstream`, `Type`, `Release`, `Tags`, `Start (optional)`, `Duration (work days)`, `Effort (days)`, `Calculated Start`, `Calculated End` and `People`. `Calculated Start` and `Calculated End` are derived schedule values: display and export them, but calculate them from the explicit start, duration and dependencies after import. Excel imports update matching activities by normalized `(name, jira)` and add unmatched activities; they must not delete activities that are not present in the workbook.
+
 If an item has no explicit start date, it starts on the earliest working day after all dependencies finish. An item with neither a start date nor dependencies remains unscheduled, stays in saved planner JSON, and is omitted from the rendered/exported Mermaid block until it is planned.
 
 ### Teams
@@ -65,7 +69,7 @@ The saved `teams` collection is also the sole source of truth for workstreams. E
 
 ### People
 
-Each person contains `id`, `name`, `team`, optional `role`, and a `leave` array. A person may have no team. Each leave entry contains inclusive `from` and `to` ISO dates, and a person may have multiple leave periods.
+Each person contains `id`, `name`, `team`, optional `role`, optional `type`, optional `capacityGrouping`, `platformFte`, optional `fteCount`, and a `leave` array. `platformFte` is `true`, `false`, or blank when not recorded; `fteCount` is blank or a non-negative number and may be fractional (for example `0.5`). A person may have no team. Each leave entry contains inclusive `from` and `to` ISO dates, and a person may have multiple leave periods. Preserve all of these fields through browser persistence, Markdown and the Excel `Team Members` sheet. Excel displays Platform FTE as `Yes`, `No`, or blank and imports the legacy/misspelled headers `Platform FTE Count` and `Platfrom FTE Count` for compatibility.
 
 ### Imported prioritisation features
 
@@ -93,6 +97,8 @@ The prioritisation workbook uses a sheet named `Features`. Map `name` to activit
 
 ## Activity bulk editing
 
+- Activity-table columns sort independently in ascending/descending order without changing saved activity order. Double-clicking a single-value cell supports inline editing for Name, Priority, Sponsor, Jira, Workstream, Release, Tags, Start, Duration and Effort. People, Dependencies and calculated End open the full activity editor because they require multi-value or derived scheduling controls.
+- Bulk Priority, Sponsor and Effort set the entered value on every selected activity; deliberately submitting an empty value clears that field. Bulk Effort accepts zero or a positive number of person-days and must not change duration. Bulk Duration accepts at least one whole working day and must not change effort; its value is required, and milestones keep their zero-day duration. The bulk **People** picker displays only people shared by every selected activity as initially selected. Submitting it replaces only that common subset on each selected activity: activity-specific people remain allocated, while shared people can be added or removed. The People cell's inline editor is a picker populated from the saved people list.
 - The Activity editor uses Microsoft-style row selection with no row checkboxes: click starts a new selection, Ctrl/Command-click toggles rows, every Shift-click adds the visible range from the current anchor without clearing earlier selections, Ctrl/Command+A selects all shown rows, and Escape clears the selection. **Select all shown** provides the same visible-row selection without a keyboard shortcut.
 - Bulk release assignment changes only the `release` field and must preserve dates, duration, effort, owners and dependencies.
 - Bulk workstream assignment moves only the selected activity objects into the chosen user-defined workstream (or `No workstream`) and must preserve their IDs, dates, duration, effort, release, tags, owners and dependencies. Its selector must be populated only from saved `teams` records.
